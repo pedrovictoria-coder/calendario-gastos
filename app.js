@@ -760,7 +760,7 @@
             }
 
             return `
-            <div class="mini-card" style="background: linear-gradient(135deg, ${card.color}, ${card.color}cc);">
+            <div class="mini-card" data-card-id="${card.id}" style="background: linear-gradient(135deg, ${card.color}, ${card.color}cc); cursor:pointer;" title="Clic para editar">
                 <div class="mini-card-top">
                     <span class="mini-card-name">${card.name}</span>
                     <span class="mini-card-type">${typeLabel}</span>
@@ -772,12 +772,6 @@
                     </div>
                     <span class="mini-card-currency">${card.currency}</span>
                     <div class="mini-card-actions">
-                        <button class="mini-card-btn edit" data-card-id="${card.id}" title="Editar">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                        </button>
                         <button class="mini-card-btn delete" data-card-id="${card.id}" title="Eliminar">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/>
@@ -791,11 +785,11 @@
             `;
         }).join('');
 
-        // Attach card action handlers
-        elements.cardsList.querySelectorAll('.mini-card-btn.edit').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openCardModalForEdit(btn.dataset.cardId);
+        // Click on card to edit
+        elements.cardsList.querySelectorAll('.mini-card[data-card-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.mini-card-btn.delete')) return;
+                openCardModalForEdit(card.dataset.cardId);
             });
         });
 
