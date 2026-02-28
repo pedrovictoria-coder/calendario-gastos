@@ -27,7 +27,7 @@
     // ========== Currency Symbols ==========
     const CURRENCY_SYMBOLS = {
         USD: '$', MXN: '$', EUR: '€', COP: '$', ARS: '$',
-        BRL: 'R$', CLP: '$', PEN: 'S/', GBP: '£'
+        BRL: 'R$', CLP: '$', PEN: 'S/', GBP: '£', RON: 'lei'
     };
 
     // ========== State ==========
