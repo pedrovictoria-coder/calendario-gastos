@@ -703,81 +703,100 @@
             cardBreakdownEl.style.display = 'none';
         }
 
-        // Sum ALL card contributions to main availability (including other currencies)
-        const allCardTotal = state.cards.reduce((s, c) => s + (state.cardBudgets[c.id + '_' + mKey] || 0), 0);
-        const totalAvailable = manualAvailability + incomeForThisMonth + allCardTotal;
+        // Calculate unified totals BY CURRENCY without mixing them
+        function getTotalsByCurrency(year, month) {
+            const days = getDaysInMonth(year, month);
+            const totals = {};
 
-        elements.totalMonth.textContent = formatCurrency(expenseTotal);
-        elements.totalIncome.textContent = formatCurrency(incomeTotal);
+            function initCurrency(curr) {
+                if (!totals[curr]) totals[curr] = { expense: 0, income: 0, available: 0 };
+            }
 
-        const balance = incomeTotal - expenseTotal;
-        elements.balanceValue.textContent = formatCurrency(balance);
-        elements.balanceValue.classList.remove('positive', 'negative', 'zero');
-        if (balance > 0) elements.balanceValue.classList.add('positive');
-        else if (balance < 0) elements.balanceValue.classList.add('negative');
-        else elements.balanceValue.classList.add('zero');
+            initCurrency('USD');
+            totals['USD'].available += (state.availability[mKey] || 0);
 
+            state.cards.forEach(c => {
+                const curr = c.currency || 'USD';
+                const chosen = state.cardBudgets[c.id + '_' + mKey] || 0;
+                initCurrency(curr);
+                totals[curr].available += chosen;
+            });
+
+            for (const key in state.entries) {
+                state.entries[key].forEach(e => {
+                    if (e.type === 'income') {
+                        const target = e.targetMonth || key.substring(0, 7);
+                        if (target === mKey) {
+                            const curr = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                            initCurrency(curr);
+                            totals[curr].income += e.amount;
+                            totals[curr].available += e.amount;
+                        }
+                    }
+                });
+            }
+
+            for (let d = 1; d <= days; d++) {
+                const dateK = dateKey(year, month, d);
+                if (state.entries[dateK]) {
+                    state.entries[dateK].forEach(e => {
+                        if (e.type === 'expense' && !e.pending) {
+                            const curr = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                            initCurrency(curr);
+                            totals[curr].expense += e.amount;
+                        }
+                    });
+                }
+            }
+            return totals;
+        }
+
+        const totals = getTotalsByCurrency(currentYear, currentMonth);
+
+        // Helper to format multi-currency blocks
+        function buildMultiCurrencyHTML(type) {
+            let html = '';
+            const currencies = Object.keys(totals).sort((a, b) => a === 'USD' ? -1 : (b === 'USD' ? 1 : 0));
+            currencies.forEach(curr => {
+                let amount = totals[curr][type];
+                if (type === 'balance') amount = totals[curr].income - totals[curr].expense;
+                if (type === 'remaining') amount = totals[curr].available - totals[curr].expense;
+
+                if (curr === 'USD' || totals[curr].available > 0 || totals[curr].expense > 0 || totals[curr].income > 0) {
+                    let colorClass = '';
+                    if (type === 'balance' || type === 'remaining') {
+                        if (amount > 0) colorClass = 'style="color:#22c55e;"';
+                        else if (amount < 0) colorClass = 'style="color:#ef4444;"';
+                    }
+                    html += `<div ${colorClass}>${formatAmount(amount, curr)} <span style="font-size: 0.5em; opacity: 0.6; vertical-align: middle;">${curr}</span></div>`;
+                }
+            });
+            return html || `<div>${formatAmount(0, 'USD')}</div>`;
+        }
+
+        elements.totalMonth.innerHTML = buildMultiCurrencyHTML('expense');
+        elements.totalIncome.innerHTML = buildMultiCurrencyHTML('income');
+        elements.balanceValue.innerHTML = buildMultiCurrencyHTML('balance');
         elements.availabilityInput.value = manualAvailability || '';
 
-        // Display the automatically calculated total
         const totalDisplayEl = document.getElementById('availabilityTotalDisplay');
         if (totalDisplayEl) {
-            totalDisplayEl.textContent = formatCurrency(totalAvailable);
+            totalDisplayEl.innerHTML = buildMultiCurrencyHTML('available');
         }
 
-        // Build hint text (breakdown of components)
-        const parts = [];
-        if (manualAvailability > 0) parts.push(formatCurrency(manualAvailability) + ' Efectivo');
-        if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' Ingresos');
+        elements.availabilityHint.textContent = 'Valores separados por divisa. Las divisas no se mezclan.';
 
-        // Group chosen card totals by currency for the hint
-        const cardSumsByCurrency = {};
-        state.cards.forEach(c => {
-            const chosen = state.cardBudgets[c.id + '_' + mKey] || 0;
-            if (chosen > 0) {
-                if (!cardSumsByCurrency[c.currency]) cardSumsByCurrency[c.currency] = 0;
-                cardSumsByCurrency[c.currency] += chosen;
-            }
-        });
-
-        for (const [curr, amt] of Object.entries(cardSumsByCurrency)) {
-            const sym = CURRENCY_SYMBOLS[curr] || '$';
-            parts.push(sym + amt.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Tarjetas ' + curr);
-        }
-
-        if (parts.length > 0) {
-            elements.availabilityHint.textContent = parts.join(' + ');
-        } else {
-            elements.availabilityHint.textContent = '';
-        }
-
-        if (totalAvailable > 0) {
+        const hasAvailable = Object.values(totals).some(t => t.available > 0);
+        if (hasAvailable) {
             elements.availabilityRemaining.style.display = 'block';
-            const remaining = totalAvailable - expenseTotal;
-            const remainingPercent = Math.max((remaining / totalAvailable) * 100, 0);
-            const spentPercent = Math.min((expenseTotal / totalAvailable) * 100, 100);
+            elements.remainingValue.innerHTML = buildMultiCurrencyHTML('remaining');
 
-            elements.remainingValue.textContent = formatCurrency(remaining);
-            elements.availabilityBarFill.style.width = remainingPercent + '%';
-
-            elements.remainingValue.classList.remove('positive', 'warning', 'danger');
-            elements.availabilityBarFill.classList.remove('warning', 'danger');
-            elements.availabilityStatus.classList.remove('positive', 'warning', 'danger');
-
-            if (remaining <= 0) {
-                elements.remainingValue.classList.add('danger');
-                elements.availabilityBarFill.classList.add('danger');
-                elements.availabilityStatus.classList.add('danger');
-                elements.availabilityStatus.textContent = '⚠️ Sin dinero disponible';
-            } else if (spentPercent >= 80) {
-                elements.remainingValue.classList.add('warning');
-                elements.availabilityBarFill.classList.add('warning');
-                elements.availabilityStatus.classList.add('warning');
-                elements.availabilityStatus.textContent = `⚡ ${remainingPercent.toFixed(1)}% restante`;
-            } else {
-                elements.remainingValue.classList.add('positive');
-                elements.availabilityStatus.classList.add('positive');
-                elements.availabilityStatus.textContent = `✅ ${remainingPercent.toFixed(1)}% disponible`;
+            // Progress bars do not work for multi-currency arrays correctly. Hide them.
+            if (elements.availabilityBarFill && elements.availabilityBarFill.parentElement) {
+                elements.availabilityBarFill.parentElement.style.display = 'none';
+            }
+            if (elements.availabilityStatus) {
+                elements.availabilityStatus.style.display = 'none';
             }
         } else {
             elements.availabilityRemaining.style.display = 'none';
@@ -786,7 +805,8 @@
         elements.budgetInput.value = budget || '';
         if (budget > 0) {
             elements.budgetBarContainer.style.display = 'block';
-            const percent = Math.min((expenseTotal / budget) * 100, 100);
+            const baseExpenseTotal = totals['USD'] ? totals['USD'].expense : 0;
+            const percent = Math.min((baseExpenseTotal / budget) * 100, 100);
             elements.budgetBarFill.style.width = percent + '%';
             elements.budgetPercent.textContent = `${percent.toFixed(1)}% utilizado`;
             elements.budgetBarFill.classList.remove('warning', 'danger');
