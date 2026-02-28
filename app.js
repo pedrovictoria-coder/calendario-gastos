@@ -234,12 +234,61 @@
             const safeCode = syncCode.replace(/[.#$\[\]]/g, '-');
             syncRef = firebaseDb.ref('calendargas/' + safeCode);
 
+            let isFirstSync = true;
+
             // Listen for remote changes
             syncListener = syncRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (!data) {
-                    // First time - push local data to Firebase
+                    // No remote data - push all local data to Firebase
+                    isFirstSync = false;
                     saveData();
+                    updateSyncUI('connected');
+                    return;
+                }
+
+                if (isFirstSync) {
+                    // First sync: MERGE local + remote (local data takes priority for conflicts)
+                    isFirstSync = false;
+                    isSyncing = true;
+
+                    // Merge entries: combine all date keys, merge entries per day
+                    const mergedEntries = { ...data.entries };
+                    for (const key in state.entries) {
+                        if (!mergedEntries[key]) {
+                            mergedEntries[key] = state.entries[key];
+                        } else {
+                            // Merge entries for the same day (avoid duplicates by ID)
+                            const existingIds = new Set(mergedEntries[key].map(e => e.id));
+                            state.entries[key].forEach(e => {
+                                if (!existingIds.has(e.id)) {
+                                    mergedEntries[key].push(e);
+                                }
+                            });
+                        }
+                    }
+                    state.entries = mergedEntries;
+
+                    // Merge cards (keep both, avoid duplicate IDs)
+                    if (data.cards && data.cards.length > 0) {
+                        const localIds = new Set(state.cards.map(c => c.id));
+                        data.cards.forEach(c => {
+                            if (!localIds.has(c.id)) state.cards.push(c);
+                        });
+                    }
+
+                    // Merge availability & budgets (local overrides if set)
+                    if (data.availability) {
+                        state.availability = { ...data.availability, ...state.availability };
+                    }
+                    if (data.budgets) {
+                        state.budgets = { ...data.budgets, ...state.budgets };
+                    }
+
+                    isSyncing = false;
+                    saveData(); // Push merged data to both localStorage and Firebase
+                    renderCalendar();
+                    if (state.selectedDate) renderDayEntries();
                     updateSyncUI('connected');
                     return;
                 }
