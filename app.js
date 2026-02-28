@@ -92,7 +92,7 @@
         budgetBarContainer: $('#budgetBarContainer'),
         budgetBarFill: $('#budgetBarFill'),
         budgetPercent: $('#budgetPercent'),
-        availabilityInput: $('#availabilityInput'),
+        sidebarCashContainer: $('#sidebarCashContainer'),
         availabilityHint: $('#availabilityHint'),
         availabilityRemaining: $('#availabilityRemaining'),
         availabilityBarFill: $('#availabilityBarFill'),
@@ -117,6 +117,8 @@
         cardSelectRow: $('#cardSelectRow'),
         cardSelectLabel: $('#cardSelectLabel'),
         cardSelectDefault: $('#cardSelectDefault'),
+        cashCurrencyGroup: $('#cashCurrencyGroup'),
+        cashCurrencySelect: $('#cashCurrencySelect'),
         pendingRow: $('#pendingRow'),
         expensePending: $('#expensePending'),
         expenseCard: $('#expenseCard'),
@@ -204,7 +206,17 @@
             }
 
             if (budgets) state.budgets = JSON.parse(budgets);
-            if (availability) state.availability = JSON.parse(availability);
+            if (availability) {
+                const parsedAvails = JSON.parse(availability);
+                state.availability = {};
+                for (const key in parsedAvails) {
+                    if (key.includes('_')) {
+                        state.availability[key] = parsedAvails[key];
+                    } else if (typeof parsedAvails[key] === 'number') {
+                        state.availability[key + '_USD'] = parsedAvails[key];
+                    }
+                }
+            }
             if (cards) {
                 const parsedCards = JSON.parse(cards);
                 // Migrate old budget to monthly budget if needed or just strip it
@@ -614,11 +626,10 @@
                     html += `<span class="day-expense-preview">${parts.join(', ')}</span>`;
                 }
 
-                // Calculate totals by currency without mixing
                 const getTotals = (arr) => {
                     const sums = {};
                     arr.forEach(e => {
-                        const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                        const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : (e.currency || 'USD');
                         if (!sums[c]) sums[c] = 0;
                         sums[c] += e.amount;
                     });
@@ -655,7 +666,6 @@
         const incomeTotal = getMonthIncomeTotal(currentYear, currentMonth);
         const mKey = monthKey(currentYear, currentMonth);
         const budget = state.budgets[mKey] || 0;
-        const manualAvailability = state.availability[mKey] || 0;
         const incomeForThisMonth = getIncomeForTargetMonth(mKey);
 
         // Calculate card contributions (user-chosen amounts, grouped by currency)
@@ -731,7 +741,12 @@
             }
 
             initCurrency('USD');
-            totals['USD'].available += (state.availability[mKey] || 0);
+            for (const curr of Object.keys(CURRENCY_SYMBOLS)) {
+                if (state.availability[mKey + '_' + curr]) {
+                    initCurrency(curr);
+                    totals[curr].available += state.availability[mKey + '_' + curr];
+                }
+            }
 
             state.cards.forEach(c => {
                 const curr = c.currency || 'USD';
@@ -795,7 +810,70 @@
         elements.totalMonth.innerHTML = buildMultiCurrencyHTML('expense');
         elements.totalIncome.innerHTML = buildMultiCurrencyHTML('income');
         elements.balanceValue.innerHTML = buildMultiCurrencyHTML('balance');
-        elements.availabilityInput.value = manualAvailability || '';
+
+        if (elements.sidebarCashContainer) {
+            let cashHTML = '<div class="avail-cards-list" style="margin-bottom: 15px;">';
+            cashHTML += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
+            cashHTML += '<span class="avail-currency-label" style="font-size: 0.7rem; color: var(--text-muted); font-weight: bold;">💵 EFECTIVO (CASH)</span>';
+            cashHTML += `<select id="addCashCurrencySelect" style="font-size: 0.7rem; padding: 2px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);">
+                <option value="">+ Añadir divisa...</option>
+                ${Object.keys(CURRENCY_SYMBOLS).map(c => `<option value="${c}">${c} (${CURRENCY_SYMBOLS[c]})</option>`).join('')}
+            </select>`;
+            cashHTML += '</div>';
+
+            const currenciesToShow = new Set(['USD']);
+            state.cards.forEach(c => currenciesToShow.add(c.currency));
+            for (const k in state.availability) {
+                if (k.startsWith(mKey + '_')) {
+                    currenciesToShow.add(k.split('_')[1]);
+                }
+            }
+
+            currenciesToShow.forEach(curr => {
+                const sym = CURRENCY_SYMBOLS[curr] || '$';
+                const val = state.availability[mKey + '_' + curr] || '';
+                cashHTML += `
+                    <div class="avail-card-row">
+                        <span class="avail-card-name" style="flex:1;">Efectivo ${curr}</span>
+                        <div class="avail-card-input-wrap">
+                            <span class="currency-sign">${sym}</span>
+                            <input type="number" class="avail-cash-input" data-currency="${curr}" 
+                                value="${val}" placeholder="0" min="0" step="0.01">
+                        </div>
+                    </div>`;
+            });
+            cashHTML += '</div>';
+            elements.sidebarCashContainer.innerHTML = cashHTML;
+
+            elements.sidebarCashContainer.querySelectorAll('.avail-cash-input').forEach(inp => {
+                inp.addEventListener('input', () => {
+                    const curr = inp.dataset.currency;
+                    const val = parseFloat(inp.value) || 0;
+                    if (val > 0) state.availability[mKey + '_' + curr] = val;
+                    else delete state.availability[mKey + '_' + curr];
+                    saveData();
+
+                    // Live update just the totals to avoid focus loss
+                    const totals = getTotalsByCurrency(currentYear, currentMonth);
+                    const totalDisplayEl = document.getElementById('availabilityTotalDisplay');
+                    if (totalDisplayEl) {
+                        totalDisplayEl.innerHTML = buildMultiCurrencyHTML('available');
+                    }
+                    elements.remainingValue.innerHTML = buildMultiCurrencyHTML('remaining');
+                });
+            });
+
+            const addCashSelect = document.getElementById('addCashCurrencySelect');
+            addCashSelect.addEventListener('change', () => {
+                const curr = addCashSelect.value;
+                if (curr && !state.availability[mKey + '_' + curr]) {
+                    state.availability[mKey + '_' + curr] = 0;
+                    saveData();
+                    updateSidebar();
+                }
+                addCashSelect.value = '';
+            });
+        }
 
         const totalDisplayEl = document.getElementById('availabilityTotalDisplay');
         if (totalDisplayEl) {
@@ -1095,6 +1173,13 @@
         if (currentVal && getCardById(currentVal)) {
             select.value = currentVal;
         }
+
+        // Initialize cash currency select if empty
+        if (!elements.cashCurrencySelect.options.length) {
+            elements.cashCurrencySelect.innerHTML = Object.keys(CURRENCY_SYMBOLS)
+                .map(c => `<option value="${c}">${c} (${CURRENCY_SYMBOLS[c]})</option>`).join('');
+        }
+        elements.cashCurrencyGroup.style.display = select.value === '' ? 'block' : 'none';
     }
 
     // ========== Modal ==========
@@ -1187,7 +1272,7 @@
         const getTotals = (arr) => {
             const sums = {};
             arr.forEach(e => {
-                const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : (e.currency || 'USD');
                 if (!sums[c]) sums[c] = 0;
                 sums[c] += e.amount;
             });
@@ -1228,14 +1313,19 @@
                 }
             }
 
-            // Show card info
+            // Show card / cash info
             let cardInfo = '';
+            let dispCurr = 'USD';
             if (entry.cardId) {
                 const card = getCardById(entry.cardId);
                 if (card) {
+                    dispCurr = card.currency;
                     const action = isIncome ? '→' : '💳';
                     cardInfo = `<span class="income-target-info">${action} ${card.name} (${card.currency})</span>`;
                 }
+            } else {
+                dispCurr = entry.currency || 'USD';
+                cardInfo = `<span class="income-target-info">💵 Efectivo (${dispCurr})</span>`;
             }
 
             // Confirm button for pending entries
@@ -1256,7 +1346,7 @@
                     <span class="expense-cat">${entry.category}</span>
                     ${targetInfo}${cardInfo}
                 </div>
-                <span class="expense-amount">${amountPrefix}${formatAmount(entry.amount, cardObj ? cardObj.currency : 'USD')}</span>
+                <span class="expense-amount">${amountPrefix}${formatAmount(entry.amount, dispCurr)}</span>
                 ${confirmBtn}
                 <button class="btn-delete-expense" data-id="${entry.id}" title="Eliminar">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1311,7 +1401,7 @@
     }
 
     // ========== Entry CRUD ==========
-    function addEntry(description, amount, category, type, targetMonth, cardId, pending) {
+    function addEntry(description, amount, category, type, targetMonth, cardId, pending, cashCurrency) {
         const { currentYear, currentMonth, selectedDate } = state;
         const key = dateKey(currentYear, currentMonth, selectedDate);
 
@@ -1329,6 +1419,7 @@
 
         if (type === 'income' && targetMonth) entry.targetMonth = targetMonth;
         if (cardId) entry.cardId = cardId;
+        else if (cashCurrency) entry.currency = cashCurrency;
 
         state.entries[key].push(entry);
         saveData();
@@ -1726,22 +1817,18 @@
             if (type === 'income') {
                 targetMonth = elements.incomeTargetMonth.value;
             }
+            const cashCurrency = !cardId ? elements.cashCurrencySelect.value : null;
 
-            addEntry(desc, amount, category, type, targetMonth, cardId, pending);
+            addEntry(desc, amount, category, type, targetMonth, cardId, pending, cashCurrency);
             elements.expenseForm.reset();
+            elements.cashCurrencyGroup.style.display = 'block'; // Reset to cash view
             elements.transactionType.value = type;
             setTransactionType(type);
             elements.expenseDescription.focus();
         });
 
-        // Availability
-        elements.availabilityInput.addEventListener('change', () => {
-            const mKey = monthKey(state.currentYear, state.currentMonth);
-            const val = parseFloat(elements.availabilityInput.value);
-            if (val > 0) state.availability[mKey] = val;
-            else delete state.availability[mKey];
-            saveData();
-            updateSidebar();
+        elements.expenseCard.addEventListener('change', () => {
+            elements.cashCurrencyGroup.style.display = elements.expenseCard.value === '' ? 'block' : 'none';
         });
 
         // Budget
