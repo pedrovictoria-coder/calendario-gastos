@@ -703,11 +703,9 @@
             cardBreakdownEl.style.display = 'none';
         }
 
-        // Only sum USD card contributions to main availability (same currency as base)
-        const usdCardTotal = state.cards
-            .filter(c => c.currency === 'USD')
-            .reduce((s, c) => s + (state.cardBudgets[c.id + '_' + mKey] || 0), 0);
-        const totalAvailable = manualAvailability + incomeForThisMonth + usdCardTotal;
+        // Sum ALL card contributions to main availability (including other currencies)
+        const allCardTotal = state.cards.reduce((s, c) => s + (state.cardBudgets[c.id + '_' + mKey] || 0), 0);
+        const totalAvailable = manualAvailability + incomeForThisMonth + allCardTotal;
 
         elements.totalMonth.textContent = formatCurrency(expenseTotal);
         elements.totalIncome.textContent = formatCurrency(incomeTotal);
@@ -727,11 +725,26 @@
             totalDisplayEl.textContent = formatCurrency(totalAvailable);
         }
 
-        // Build hint text (only USD components)
+        // Build hint text (breakdown of components)
         const parts = [];
         if (manualAvailability > 0) parts.push(formatCurrency(manualAvailability) + ' Efectivo');
         if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' Ingresos');
-        if (usdCardTotal > 0) parts.push(formatCurrency(usdCardTotal) + ' Tarjetas');
+
+        // Group chosen card totals by currency for the hint
+        const cardSumsByCurrency = {};
+        state.cards.forEach(c => {
+            const chosen = state.cardBudgets[c.id + '_' + mKey] || 0;
+            if (chosen > 0) {
+                if (!cardSumsByCurrency[c.currency]) cardSumsByCurrency[c.currency] = 0;
+                cardSumsByCurrency[c.currency] += chosen;
+            }
+        });
+
+        for (const [curr, amt] of Object.entries(cardSumsByCurrency)) {
+            const sym = CURRENCY_SYMBOLS[curr] || '$';
+            parts.push(sym + amt.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Tarjetas ' + curr);
+        }
+
         if (parts.length > 0) {
             elements.availabilityHint.textContent = parts.join(' + ');
         } else {
