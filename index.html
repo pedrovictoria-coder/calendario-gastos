@@ -49,11 +49,19 @@
 
                 <!-- Disponibilidad -->
                 <div class="summary-card availability-card" id="availabilityCard">
-                    <span class="summary-label">💰 Dinero Disponible</span>
+                    <span class="summary-label">💰 Dinero Disponible Total</span>
+                    <div class="availability-total-display" id="availabilityTotalDisplay"
+                        style="font-size: 1.5rem; font-weight: bold; color: var(--accent); margin: 5px 0;">
+                        $0.00
+                    </div>
+
                     <div class="budget-input-wrapper">
+                        <span class="summary-label"
+                            style="font-size: 0.7rem; color: var(--text-muted); margin-right: 10px;">💵 Efectivo
+                            (Cash)</span>
                         <span class="currency-sign">$</span>
                         <input type="number" id="availabilityInput" class="budget-input availability-input"
-                            placeholder="Base inicial..." min="0" step="0.01">
+                            placeholder="Efvo. manual..." min="0" step="0.01" style="font-size: 0.9rem; padding: 4px;">
                     </div>
                     <span class="availability-hint" id="availabilityHint"></span>
                     <div class="availability-cards-breakdown" id="availabilityCardsBreakdown"></div>

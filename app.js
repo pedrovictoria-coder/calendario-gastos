@@ -721,13 +721,19 @@
 
         elements.availabilityInput.value = manualAvailability || '';
 
+        // Display the automatically calculated total
+        const totalDisplayEl = document.getElementById('availabilityTotalDisplay');
+        if (totalDisplayEl) {
+            totalDisplayEl.textContent = formatCurrency(totalAvailable);
+        }
+
         // Build hint text (only USD components)
         const parts = [];
-        if (manualAvailability > 0) parts.push('Base');
-        if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' ingresos');
-        if (usdCardTotal > 0) parts.push(formatCurrency(usdCardTotal) + ' tarjetas');
+        if (manualAvailability > 0) parts.push(formatCurrency(manualAvailability) + ' Efectivo');
+        if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' Ingresos');
+        if (usdCardTotal > 0) parts.push(formatCurrency(usdCardTotal) + ' Tarjetas');
         if (parts.length > 0) {
-            elements.availabilityHint.textContent = parts.join(' + ') + ' = ' + formatCurrency(totalAvailable);
+            elements.availabilityHint.textContent = parts.join(' + ');
         } else {
             elements.availabilityHint.textContent = '';
         }
