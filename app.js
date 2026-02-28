@@ -581,9 +581,6 @@
             const dayExpensesPending = dayEntries.filter(e => e.type === 'expense' && e.pending);
             const dayExpensesAll = dayEntries.filter(e => e.type === 'expense');
             const dayIncome = dayEntries.filter(e => e.type === 'income');
-            const expenseTotal = dayExpensesConfirmed.reduce((s, e) => s + e.amount, 0);
-            const pendingTotal = dayExpensesPending.reduce((s, e) => s + e.amount, 0);
-            const incomeTotal = dayIncome.reduce((s, e) => s + e.amount, 0);
             const todayClass = isToday(currentYear, currentMonth, day) ? ' today' : '';
             const hasExpenses = dayExpensesConfirmed.length > 0 ? ' has-expenses' : '';
             const hasIncome = dayIncome.length > 0 ? ' has-income' : '';
@@ -617,9 +614,30 @@
                     html += `<span class="day-expense-preview">${parts.join(', ')}</span>`;
                 }
 
-                if (incomeTotal > 0) html += `<span class="day-income-total">+${formatCurrency(incomeTotal)}</span>`;
-                if (expenseTotal > 0) html += `<span class="day-total">-${formatCurrency(expenseTotal)}</span>`;
-                if (pendingTotal > 0) html += `<span class="day-pending-total">🕐 ${formatCurrency(pendingTotal)}</span>`;
+                // Calculate totals by currency without mixing
+                const getTotals = (arr) => {
+                    const sums = {};
+                    arr.forEach(e => {
+                        const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                        if (!sums[c]) sums[c] = 0;
+                        sums[c] += e.amount;
+                    });
+                    return sums;
+                };
+
+                const dayIncomesByCurr = getTotals(dayIncome);
+                const dayExpensesByCurr = getTotals(dayExpensesConfirmed);
+                const dayPendingByCurr = getTotals(dayExpensesPending);
+
+                for (const c in dayIncomesByCurr) {
+                    html += `<span class="day-income-total">+${formatAmount(dayIncomesByCurr[c], c)}</span>`;
+                }
+                for (const c in dayExpensesByCurr) {
+                    html += `<span class="day-total">-${formatAmount(dayExpensesByCurr[c], c)}</span>`;
+                }
+                for (const c in dayPendingByCurr) {
+                    html += `<span class="day-pending-total">🕐 -${formatAmount(dayPendingByCurr[c], c)}</span>`;
+                }
             }
 
             dayDiv.innerHTML = html;
@@ -1164,9 +1182,21 @@
 
         const confirmedExpenses = entries.filter(e => e.type === 'expense' && !e.pending);
         const pendingExpenses = entries.filter(e => e.type === 'expense' && e.pending);
-        const expenseTotal = confirmedExpenses.reduce((s, e) => s + e.amount, 0);
-        const pendingTotal = pendingExpenses.reduce((s, e) => s + e.amount, 0);
-        const incomeTotal = entries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+        const dayIncomes = entries.filter(e => e.type === 'income');
+
+        const getTotals = (arr) => {
+            const sums = {};
+            arr.forEach(e => {
+                const c = e.cardId ? getCardById(e.cardId)?.currency || 'USD' : 'USD';
+                if (!sums[c]) sums[c] = 0;
+                sums[c] += e.amount;
+            });
+            return sums;
+        };
+
+        const incomesByCurr = getTotals(dayIncomes);
+        const expensesByCurr = getTotals(confirmedExpenses);
+        const pendingByCurr = getTotals(pendingExpenses);
 
         elements.dayExpensesList.innerHTML = entries.map((entry, index) => {
             const isIncome = entry.type === 'income';
@@ -1226,7 +1256,7 @@
                     <span class="expense-cat">${entry.category}</span>
                     ${targetInfo}${cardInfo}
                 </div>
-                <span class="expense-amount">${amountPrefix}${formatCurrency(entry.amount)}</span>
+                <span class="expense-amount">${amountPrefix}${formatAmount(entry.amount, cardObj ? cardObj.currency : 'USD')}</span>
                 ${confirmBtn}
                 <button class="btn-delete-expense" data-id="${entry.id}" title="Eliminar">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1238,24 +1268,28 @@
         }).join('');
 
         let summaryHtml = '';
-        if (incomeTotal > 0) {
+
+        if (dayIncomes.length > 0) {
+            let sumsHtml = Object.keys(incomesByCurr).map(c => `+${formatAmount(incomesByCurr[c], c)}`).join('<br>');
             summaryHtml += `<div class="day-expense-item income-item" style="border-color: rgba(34,197,94,0.2);">
                 <div class="expense-info"><span class="expense-desc">Total ingresos</span></div>
-                <span class="expense-amount" style="color:#22c55e; font-size:1rem;">+${formatCurrency(incomeTotal)}</span>
+                <span class="expense-amount" style="color:#22c55e; font-size:1rem;">${sumsHtml}</span>
                 <div style="width:30px;"></div>
             </div>`;
         }
-        if (expenseTotal > 0) {
+        if (confirmedExpenses.length > 0) {
+            let sumsHtml = Object.keys(expensesByCurr).map(c => `-${formatAmount(expensesByCurr[c], c)}`).join('<br>');
             summaryHtml += `<div class="day-expense-item" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.08)); border-color: rgba(99,102,241,0.2);">
                 <div class="expense-info"><span class="expense-desc">Total gastos</span></div>
-                <span class="expense-amount" style="font-size:1rem;">-${formatCurrency(expenseTotal)}</span>
+                <span class="expense-amount" style="font-size:1rem;">${sumsHtml}</span>
                 <div style="width:30px;"></div>
             </div>`;
         }
-        if (pendingTotal > 0) {
+        if (pendingExpenses.length > 0) {
+            let sumsHtml = Object.keys(pendingByCurr).map(c => formatAmount(pendingByCurr[c], c)).join('<br>');
             summaryHtml += `<div class="day-expense-item pending-item" style="border-color: rgba(245,158,11,0.2);">
                 <div class="expense-info"><span class="expense-desc">🕐 Total pendiente</span></div>
-                <span class="expense-amount" style="color:#f59e0b; font-size:1rem;">${formatCurrency(pendingTotal)}</span>
+                <span class="expense-amount" style="color:#f59e0b; font-size:1rem;">${sumsHtml}</span>
                 <div style="width:30px;"></div>
             </div>`;
         }
