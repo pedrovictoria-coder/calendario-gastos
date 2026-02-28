@@ -799,6 +799,42 @@
                 deleteCard(btn.dataset.cardId);
             });
         });
+
+        // Carousel navigation
+        const dotsContainer = document.getElementById('cardsDots');
+        const nav = document.getElementById('cardsNav');
+        if (state.cards.length <= 1) {
+            nav.style.display = 'none';
+        } else {
+            nav.style.display = 'flex';
+            dotsContainer.innerHTML = state.cards.map((_, i) =>
+                `<span class="cards-dot${i === 0 ? ' active' : ''}" data-idx="${i}"></span>`
+            ).join('');
+
+            // Dot click
+            dotsContainer.querySelectorAll('.cards-dot').forEach(dot => {
+                dot.addEventListener('click', () => {
+                    const idx = parseInt(dot.dataset.idx);
+                    elements.cardsList.scrollTo({ left: idx * elements.cardsList.offsetWidth, behavior: 'smooth' });
+                });
+            });
+
+            // Prev/Next
+            document.getElementById('cardPrev').onclick = () => {
+                elements.cardsList.scrollBy({ left: -elements.cardsList.offsetWidth, behavior: 'smooth' });
+            };
+            document.getElementById('cardNext').onclick = () => {
+                elements.cardsList.scrollBy({ left: elements.cardsList.offsetWidth, behavior: 'smooth' });
+            };
+
+            // Scroll tracking - update active dot
+            elements.cardsList.onscroll = () => {
+                const idx = Math.round(elements.cardsList.scrollLeft / elements.cardsList.offsetWidth);
+                dotsContainer.querySelectorAll('.cards-dot').forEach((d, i) => {
+                    d.classList.toggle('active', i === idx);
+                });
+            };
+        }
     }
 
     // ========== Card CRUD ==========
