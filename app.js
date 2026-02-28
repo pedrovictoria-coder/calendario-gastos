@@ -787,15 +787,16 @@
         const totals = getTotalsByCurrency(currentYear, currentMonth);
 
         // Helper to format multi-currency blocks
-        function buildMultiCurrencyHTML(type) {
+        function buildMultiCurrencyHTML(type, dataToUse) {
+            const currentTotals = dataToUse || totals;
             let html = '';
-            const currencies = Object.keys(totals).sort((a, b) => a === 'USD' ? -1 : (b === 'USD' ? 1 : 0));
+            const currencies = Object.keys(currentTotals).sort((a, b) => a === 'USD' ? -1 : (b === 'USD' ? 1 : 0));
             currencies.forEach(curr => {
-                let amount = totals[curr][type];
-                if (type === 'balance') amount = totals[curr].income - totals[curr].expense;
-                if (type === 'remaining') amount = totals[curr].available - totals[curr].expense;
+                let amount = currentTotals[curr][type];
+                if (type === 'balance') amount = currentTotals[curr].income - currentTotals[curr].expense;
+                if (type === 'remaining') amount = currentTotals[curr].available - currentTotals[curr].expense;
 
-                if (curr === 'USD' || totals[curr].available > 0 || totals[curr].expense > 0 || totals[curr].income > 0) {
+                if (curr === 'USD' || currentTotals[curr].available > 0 || currentTotals[curr].expense > 0 || currentTotals[curr].income > 0) {
                     let colorClass = '';
                     if (type === 'balance' || type === 'remaining') {
                         if (amount > 0) colorClass = 'style="color:#22c55e;"';
@@ -833,13 +834,11 @@
                 const sym = CURRENCY_SYMBOLS[curr] || '$';
                 const val = state.availability[mKey + '_' + curr] || '';
                 cashHTML += `
-                    <div class="avail-card-row">
-                        <span class="avail-card-name" style="flex:1;">Efectivo ${curr}</span>
-                        <div class="avail-card-input-wrap">
-                            <span class="currency-sign">${sym}</span>
-                            <input type="number" class="avail-cash-input" data-currency="${curr}" 
-                                value="${val}" placeholder="0" min="0" step="0.01">
-                        </div>
+                    <div class="budget-input-wrapper" style="margin-bottom: 8px; background: rgba(0,0,0,0.15); padding: 4px 8px; border-radius: 6px;">
+                        <span class="summary-label" style="font-size: 0.65rem; color: var(--text-muted); margin-right: 8px; min-width: 50px;">Efe. ${curr}</span>
+                        <span class="currency-sign" style="font-size:0.9rem;">${sym}</span>
+                        <input type="number" class="budget-input avail-cash-input" data-currency="${curr}" 
+                            value="${val}" placeholder="0.00" min="0" step="0.01" style="font-size: 0.95rem; padding: 2px;">
                     </div>`;
             });
             cashHTML += '</div>';
@@ -854,12 +853,14 @@
                     saveData();
 
                     // Live update just the totals to avoid focus loss
-                    const totals = getTotalsByCurrency(currentYear, currentMonth);
+                    const newTotals = getTotalsByCurrency(currentYear, currentMonth);
                     const totalDisplayEl = document.getElementById('availabilityTotalDisplay');
                     if (totalDisplayEl) {
-                        totalDisplayEl.innerHTML = buildMultiCurrencyHTML('available');
+                        totalDisplayEl.innerHTML = buildMultiCurrencyHTML('available', newTotals);
                     }
-                    elements.remainingValue.innerHTML = buildMultiCurrencyHTML('remaining');
+                    if (elements.remainingValue) {
+                        elements.remainingValue.innerHTML = buildMultiCurrencyHTML('remaining', newTotals);
+                    }
                 });
             });
 
