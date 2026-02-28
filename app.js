@@ -835,7 +835,7 @@
                 const val = state.availability[mKey + '_' + curr] || '';
                 cashHTML += `
                     <div class="budget-input-wrapper" style="margin-bottom: 8px; background: rgba(0,0,0,0.15); padding: 4px 8px; border-radius: 6px;">
-                        <span class="summary-label" style="font-size: 0.65rem; color: var(--text-muted); margin-right: 8px; min-width: 50px;">Efe. ${curr}</span>
+                        <span class="summary-label" style="font-size: 0.65rem; color: var(--text-muted); margin-right: 8px; min-width: 65px;">Efectivo ${curr}</span>
                         <span class="currency-sign" style="font-size:0.9rem;">${sym}</span>
                         <input type="number" class="budget-input avail-cash-input" data-currency="${curr}" 
                             value="${val}" placeholder="0.00" min="0" step="0.01" style="font-size: 0.95rem; padding: 2px;">
