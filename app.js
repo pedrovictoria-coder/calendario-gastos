@@ -617,7 +617,39 @@
         const budget = state.budgets[mKey] || 0;
         const manualAvailability = state.availability[mKey] || 0;
         const incomeForThisMonth = getIncomeForTargetMonth(mKey);
-        const totalAvailable = manualAvailability + incomeForThisMonth;
+
+        // Calculate card balances
+        let cardsTotal = 0;
+        const cardBreakdownEl = document.getElementById('availabilityCardsBreakdown');
+        if (state.cards.length > 0) {
+            let cardsHTML = '<div class="avail-cards-list">';
+            state.cards.forEach(card => {
+                const spent = getCardSpent(card.id);
+                const deposits = getCardDeposits(card.id);
+                const available = card.balance - spent + deposits;
+                const sym = CURRENCY_SYMBOLS[card.currency] || '$';
+                cardsTotal += available;
+                cardsHTML += `
+                    <div class="avail-card-row">
+                        <span class="avail-card-dot" style="background:${card.color};"></span>
+                        <span class="avail-card-name">${card.name}</span>
+                        <span class="avail-card-amount">${sym}${available.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>`;
+            });
+            cardsHTML += `
+                <div class="avail-card-row avail-card-total">
+                    <span class="avail-card-name">💳 Total tarjetas</span>
+                    <span class="avail-card-amount">$${cardsTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+            </div>`;
+            cardBreakdownEl.innerHTML = cardsHTML;
+            cardBreakdownEl.style.display = 'block';
+        } else {
+            cardBreakdownEl.innerHTML = '';
+            cardBreakdownEl.style.display = 'none';
+        }
+
+        const totalAvailable = manualAvailability + incomeForThisMonth + cardsTotal;
 
         elements.totalMonth.textContent = formatCurrency(expenseTotal);
         elements.totalIncome.textContent = formatCurrency(incomeTotal);
@@ -631,10 +663,13 @@
 
         elements.availabilityInput.value = manualAvailability || '';
 
-        if (incomeForThisMonth > 0 && manualAvailability > 0) {
-            elements.availabilityHint.textContent = `Base + ${formatCurrency(incomeForThisMonth)} en ingresos = ${formatCurrency(totalAvailable)}`;
-        } else if (incomeForThisMonth > 0) {
-            elements.availabilityHint.textContent = `+ ${formatCurrency(incomeForThisMonth)} de ingresos asignados`;
+        // Build hint text
+        const parts = [];
+        if (manualAvailability > 0) parts.push('Base');
+        if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' ingresos');
+        if (cardsTotal > 0) parts.push(formatCurrency(cardsTotal) + ' tarjetas');
+        if (parts.length > 0) {
+            elements.availabilityHint.textContent = parts.join(' + ') + ' = ' + formatCurrency(totalAvailable);
         } else {
             elements.availabilityHint.textContent = '';
         }

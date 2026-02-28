@@ -298,6 +298,59 @@ body::before {
     margin-top: 2px;
 }
 
+.availability-cards-breakdown {
+    margin-top: 6px;
+}
+
+.avail-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.avail-card-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.68rem;
+}
+
+.avail-card-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.avail-card-name {
+    flex: 1;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.avail-card-amount {
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.7rem;
+}
+
+.avail-card-total {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 4px;
+    margin-top: 2px;
+}
+
+.avail-card-total .avail-card-name {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.avail-card-total .avail-card-amount {
+    color: var(--accent);
+}
+
 /* Income Card */
 .income-card {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.08));

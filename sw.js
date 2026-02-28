@@ -1,5 +1,5 @@
 // CalendarGas Service Worker - Offline Support
-const CACHE_NAME = 'calendargas-v3';
+const CACHE_NAME = 'calendargas-v4';
 const ASSETS = [
     './',
     './index.html',
