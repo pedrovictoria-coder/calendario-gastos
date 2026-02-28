@@ -205,7 +205,12 @@
 
             if (budgets) state.budgets = JSON.parse(budgets);
             if (availability) state.availability = JSON.parse(availability);
-            if (cards) state.cards = JSON.parse(cards);
+            if (cards) {
+                const parsedCards = JSON.parse(cards);
+                // Migrate old budget to monthly budget if needed or just strip it
+                parsedCards.forEach(c => delete c.budget);
+                state.cards = parsedCards;
+            }
 
             const cardBdg = localStorage.getItem('calendargas_cardBudgets');
             if (cardBdg) state.cardBudgets = JSON.parse(cardBdg);
@@ -808,7 +813,7 @@
 
             // Budget progress
             const mKey = monthKey(state.currentYear, state.currentMonth);
-            const budget = state.cardBudgets[card.id + '_' + mKey] || card.budget || 0;
+            const budget = state.cardBudgets[card.id + '_' + mKey] || 0;
             let budgetHTML = '';
             if (budget > 0) {
                 const budgetPercent = Math.min((spent / budget) * 100, 100);
@@ -937,7 +942,7 @@
             elements.cardCurrency.value = editCard.currency;
             elements.cardBalance.value = editCard.balance;
             const mKey = monthKey(state.currentYear, state.currentMonth);
-            elements.cardBudget.value = state.cardBudgets[editCard.id + '_' + mKey] || editCard.budget || '';
+            elements.cardBudget.value = state.cardBudgets[editCard.id + '_' + mKey] || '';
             elements.cardColor.value = editCard.color;
             updateCardBalanceLabel();
         } else {
@@ -971,6 +976,7 @@
             const idx = state.cards.findIndex(c => c.id === editId);
             if (idx >= 0) {
                 state.cards[idx] = { ...state.cards[idx], ...data };
+                delete state.cards[idx].budget; // Ensure old budget prop is wiped
                 // Save budget for current month
                 if (budgetValue > 0) {
                     state.cardBudgets[editId + '_' + mKey] = budgetValue;
