@@ -305,14 +305,29 @@ body::before {
 .avail-cards-list {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
+}
+
+.avail-currency-group {
+    margin-bottom: 4px;
+}
+
+.avail-currency-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 2px;
 }
 
 .avail-card-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.68rem;
+    gap: 5px;
+    font-size: 0.65rem;
+    padding: 1px 0;
 }
 
 .avail-card-dot {
@@ -323,10 +338,48 @@ body::before {
 }
 
 .avail-card-name {
-    flex: 1;
+    flex-shrink: 0;
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80px;
+    font-size: 0.6rem;
+}
+
+.avail-card-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.avail-card-input {
+    width: 55px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 4px;
+    text-align: right;
+    font-family: inherit;
+    transition: border-color var(--transition);
+}
+
+.avail-card-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.avail-card-input::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.avail-card-max {
+    font-size: 0.55rem;
+    color: var(--text-muted);
     white-space: nowrap;
 }
 
@@ -338,13 +391,14 @@ body::before {
 
 .avail-card-total {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding-top: 4px;
+    padding-top: 3px;
     margin-top: 2px;
 }
 
 .avail-card-total .avail-card-name {
     font-weight: 700;
     color: var(--text-primary);
+    max-width: unset;
 }
 
 .avail-card-total .avail-card-amount {

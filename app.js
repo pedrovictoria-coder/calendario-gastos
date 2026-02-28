@@ -38,6 +38,7 @@
         entries: {},
         budgets: {},
         availability: {},
+        cardAvailability: {}, // { cardId: amountToInclude }
         cards: [], // [{ id, name, type:'credit'|'debit', currency, balance, color }]
     };
 
@@ -162,6 +163,7 @@
             localStorage.setItem('calendargas_budgets', JSON.stringify(state.budgets));
             localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
             localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
+            localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
         } catch (e) {
             console.warn('Error saving local data:', e);
         }
@@ -172,6 +174,7 @@
                 budgets: state.budgets,
                 availability: state.availability,
                 cards: state.cards,
+                cardAvailability: state.cardAvailability,
                 lastUpdated: Date.now()
             }).catch(err => console.warn('Firebase write error:', err));
         }
@@ -200,6 +203,8 @@
             if (budgets) state.budgets = JSON.parse(budgets);
             if (availability) state.availability = JSON.parse(availability);
             if (cards) state.cards = JSON.parse(cards);
+            const cardAvail = localStorage.getItem('calendargas_cardAvailability');
+            if (cardAvail) state.cardAvailability = JSON.parse(cardAvail);
         } catch (e) {
             console.warn('Error loading data:', e);
         }
@@ -284,6 +289,9 @@
                     if (data.budgets) {
                         state.budgets = { ...data.budgets, ...state.budgets };
                     }
+                    if (data.cardAvailability) {
+                        state.cardAvailability = { ...data.cardAvailability, ...state.cardAvailability };
+                    }
 
                     isSyncing = false;
                     saveData(); // Push merged data to both localStorage and Firebase
@@ -299,6 +307,7 @@
                 if (data.budgets) state.budgets = data.budgets;
                 if (data.availability) state.availability = data.availability;
                 if (data.cards) state.cards = data.cards;
+                if (data.cardAvailability) state.cardAvailability = data.cardAvailability;
 
                 // Save to localStorage as cache
                 try {
@@ -306,6 +315,7 @@
                     localStorage.setItem('calendargas_budgets', JSON.stringify(state.budgets));
                     localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
                     localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
+                    localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
                 } catch (e) { }
 
                 // Re-render everything
@@ -618,38 +628,73 @@
         const manualAvailability = state.availability[mKey] || 0;
         const incomeForThisMonth = getIncomeForTargetMonth(mKey);
 
-        // Calculate card balances
-        let cardsTotal = 0;
+        // Calculate card contributions (user-chosen amounts, grouped by currency)
         const cardBreakdownEl = document.getElementById('availabilityCardsBreakdown');
         if (state.cards.length > 0) {
-            let cardsHTML = '<div class="avail-cards-list">';
+            // Group cards by currency
+            const groups = {};
             state.cards.forEach(card => {
+                if (!groups[card.currency]) groups[card.currency] = [];
                 const spent = getCardSpent(card.id);
                 const deposits = getCardDeposits(card.id);
-                const available = card.balance - spent + deposits;
-                const sym = CURRENCY_SYMBOLS[card.currency] || '$';
-                cardsTotal += available;
-                cardsHTML += `
+                const maxAvailable = card.balance - spent + deposits;
+                const chosen = state.cardAvailability[card.id] !== undefined ? state.cardAvailability[card.id] : 0;
+                groups[card.currency].push({ ...card, maxAvailable, chosen });
+            });
+
+            let cardsHTML = '<div class="avail-cards-list">';
+            for (const currency of Object.keys(groups)) {
+                const sym = CURRENCY_SYMBOLS[currency] || '$';
+                const groupCards = groups[currency];
+                const groupTotal = groupCards.reduce((s, c) => s + c.chosen, 0);
+                cardsHTML += `<div class="avail-currency-group">
+                    <span class="avail-currency-label">${currency} (${sym})</span>`;
+                groupCards.forEach(card => {
+                    cardsHTML += `
                     <div class="avail-card-row">
                         <span class="avail-card-dot" style="background:${card.color};"></span>
                         <span class="avail-card-name">${card.name}</span>
-                        <span class="avail-card-amount">${sym}${available.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <div class="avail-card-input-wrap">
+                            <input type="number" class="avail-card-input" data-card-id="${card.id}" 
+                                value="${card.chosen || ''}" placeholder="0" min="0" 
+                                max="${card.maxAvailable.toFixed(2)}" step="0.01">
+                            <span class="avail-card-max" title="Disponible en tarjeta">/ ${sym}${card.maxAvailable.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
                     </div>`;
-            });
-            cardsHTML += `
-                <div class="avail-card-row avail-card-total">
-                    <span class="avail-card-name">💳 Total tarjetas</span>
-                    <span class="avail-card-amount">$${cardsTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-            </div>`;
+                });
+                if (groupTotal > 0) {
+                    cardsHTML += `<div class="avail-card-row avail-card-total">
+                        <span class="avail-card-name">Subtotal ${currency}</span>
+                        <span class="avail-card-amount">${sym}${groupTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>`;
+                }
+                cardsHTML += '</div>';
+            }
+            cardsHTML += '</div>';
             cardBreakdownEl.innerHTML = cardsHTML;
             cardBreakdownEl.style.display = 'block';
+
+            // Event listeners for card availability inputs
+            cardBreakdownEl.querySelectorAll('.avail-card-input').forEach(inp => {
+                inp.addEventListener('change', () => {
+                    const cardId = inp.dataset.cardId;
+                    const val = parseFloat(inp.value) || 0;
+                    if (val > 0) state.cardAvailability[cardId] = val;
+                    else delete state.cardAvailability[cardId];
+                    saveData();
+                    updateSidebar();
+                });
+            });
         } else {
             cardBreakdownEl.innerHTML = '';
             cardBreakdownEl.style.display = 'none';
         }
 
-        const totalAvailable = manualAvailability + incomeForThisMonth + cardsTotal;
+        // Only sum USD card contributions to main availability (same currency as base)
+        const usdCardTotal = state.cards
+            .filter(c => c.currency === 'USD')
+            .reduce((s, c) => s + (state.cardAvailability[c.id] || 0), 0);
+        const totalAvailable = manualAvailability + incomeForThisMonth + usdCardTotal;
 
         elements.totalMonth.textContent = formatCurrency(expenseTotal);
         elements.totalIncome.textContent = formatCurrency(incomeTotal);
@@ -663,11 +708,11 @@
 
         elements.availabilityInput.value = manualAvailability || '';
 
-        // Build hint text
+        // Build hint text (only USD components)
         const parts = [];
         if (manualAvailability > 0) parts.push('Base');
         if (incomeForThisMonth > 0) parts.push(formatCurrency(incomeForThisMonth) + ' ingresos');
-        if (cardsTotal > 0) parts.push(formatCurrency(cardsTotal) + ' tarjetas');
+        if (usdCardTotal > 0) parts.push(formatCurrency(usdCardTotal) + ' tarjetas');
         if (parts.length > 0) {
             elements.availabilityHint.textContent = parts.join(' + ') + ' = ' + formatCurrency(totalAvailable);
         } else {
