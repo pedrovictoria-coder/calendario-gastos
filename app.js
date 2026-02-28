@@ -38,7 +38,7 @@
         entries: {},
         budgets: {},
         availability: {},
-        cardAvailability: {}, // { cardId: amountToInclude }
+
         cardBudgets: {}, // { "cardId_YYYY-MM": budget } - monthly card budgets
         cards: [], // [{ id, name, type:'credit'|'debit', currency, balance, color }]
     };
@@ -164,7 +164,7 @@
             localStorage.setItem('calendargas_budgets', JSON.stringify(state.budgets));
             localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
             localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
-            localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
+
             localStorage.setItem('calendargas_cardBudgets', JSON.stringify(state.cardBudgets));
         } catch (e) {
             console.warn('Error saving local data:', e);
@@ -176,7 +176,7 @@
                 budgets: state.budgets,
                 availability: state.availability,
                 cards: state.cards,
-                cardAvailability: state.cardAvailability,
+
                 cardBudgets: state.cardBudgets,
                 lastUpdated: Date.now()
             }).catch(err => console.warn('Firebase write error:', err));
@@ -206,8 +206,7 @@
             if (budgets) state.budgets = JSON.parse(budgets);
             if (availability) state.availability = JSON.parse(availability);
             if (cards) state.cards = JSON.parse(cards);
-            const cardAvail = localStorage.getItem('calendargas_cardAvailability');
-            if (cardAvail) state.cardAvailability = JSON.parse(cardAvail);
+
             const cardBdg = localStorage.getItem('calendargas_cardBudgets');
             if (cardBdg) state.cardBudgets = JSON.parse(cardBdg);
         } catch (e) {
@@ -294,9 +293,7 @@
                     if (data.budgets) {
                         state.budgets = { ...data.budgets, ...state.budgets };
                     }
-                    if (data.cardAvailability) {
-                        state.cardAvailability = { ...data.cardAvailability, ...state.cardAvailability };
-                    }
+
                     if (data.cardBudgets) {
                         state.cardBudgets = { ...data.cardBudgets, ...state.cardBudgets };
                     }
@@ -315,7 +312,7 @@
                 if (data.budgets) state.budgets = data.budgets;
                 if (data.availability) state.availability = data.availability;
                 if (data.cards) state.cards = data.cards;
-                if (data.cardAvailability) state.cardAvailability = data.cardAvailability;
+
                 if (data.cardBudgets) state.cardBudgets = data.cardBudgets;
 
                 // Save to localStorage as cache
@@ -324,7 +321,7 @@
                     localStorage.setItem('calendargas_budgets', JSON.stringify(state.budgets));
                     localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
                     localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
-                    localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
+
                     localStorage.setItem('calendargas_cardBudgets', JSON.stringify(state.cardBudgets));
                 } catch (e) { }
 
@@ -648,7 +645,7 @@
                 const spent = getCardSpent(card.id);
                 const deposits = getCardDeposits(card.id);
                 const maxAvailable = card.balance - spent + deposits;
-                const chosen = state.cardAvailability[card.id] !== undefined ? state.cardAvailability[card.id] : 0;
+                const chosen = state.cardBudgets[card.id + '_' + mKey] !== undefined ? state.cardBudgets[card.id + '_' + mKey] : 0;
                 groups[card.currency].push({ ...card, maxAvailable, chosen });
             });
 
@@ -689,10 +686,11 @@
                 inp.addEventListener('change', () => {
                     const cardId = inp.dataset.cardId;
                     const val = parseFloat(inp.value) || 0;
-                    if (val > 0) state.cardAvailability[cardId] = val;
-                    else delete state.cardAvailability[cardId];
+                    if (val > 0) state.cardBudgets[cardId + '_' + mKey] = val;
+                    else delete state.cardBudgets[cardId + '_' + mKey];
                     saveData();
                     updateSidebar();
+                    renderCards(); // Re-render cards to update budget progress bars
                 });
             });
         } else {
@@ -703,7 +701,7 @@
         // Only sum USD card contributions to main availability (same currency as base)
         const usdCardTotal = state.cards
             .filter(c => c.currency === 'USD')
-            .reduce((s, c) => s + (state.cardAvailability[c.id] || 0), 0);
+            .reduce((s, c) => s + (state.cardBudgets[c.id + '_' + mKey] || 0), 0);
         const totalAvailable = manualAvailability + incomeForThisMonth + usdCardTotal;
 
         elements.totalMonth.textContent = formatCurrency(expenseTotal);
