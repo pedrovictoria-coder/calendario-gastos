@@ -39,6 +39,7 @@
         budgets: {},
         availability: {},
         cardAvailability: {}, // { cardId: amountToInclude }
+        cardBudgets: {}, // { "cardId_YYYY-MM": budget } - monthly card budgets
         cards: [], // [{ id, name, type:'credit'|'debit', currency, balance, color }]
     };
 
@@ -164,6 +165,7 @@
             localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
             localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
             localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
+            localStorage.setItem('calendargas_cardBudgets', JSON.stringify(state.cardBudgets));
         } catch (e) {
             console.warn('Error saving local data:', e);
         }
@@ -175,6 +177,7 @@
                 availability: state.availability,
                 cards: state.cards,
                 cardAvailability: state.cardAvailability,
+                cardBudgets: state.cardBudgets,
                 lastUpdated: Date.now()
             }).catch(err => console.warn('Firebase write error:', err));
         }
@@ -205,6 +208,8 @@
             if (cards) state.cards = JSON.parse(cards);
             const cardAvail = localStorage.getItem('calendargas_cardAvailability');
             if (cardAvail) state.cardAvailability = JSON.parse(cardAvail);
+            const cardBdg = localStorage.getItem('calendargas_cardBudgets');
+            if (cardBdg) state.cardBudgets = JSON.parse(cardBdg);
         } catch (e) {
             console.warn('Error loading data:', e);
         }
@@ -292,6 +297,9 @@
                     if (data.cardAvailability) {
                         state.cardAvailability = { ...data.cardAvailability, ...state.cardAvailability };
                     }
+                    if (data.cardBudgets) {
+                        state.cardBudgets = { ...data.cardBudgets, ...state.cardBudgets };
+                    }
 
                     isSyncing = false;
                     saveData(); // Push merged data to both localStorage and Firebase
@@ -308,6 +316,7 @@
                 if (data.availability) state.availability = data.availability;
                 if (data.cards) state.cards = data.cards;
                 if (data.cardAvailability) state.cardAvailability = data.cardAvailability;
+                if (data.cardBudgets) state.cardBudgets = data.cardBudgets;
 
                 // Save to localStorage as cache
                 try {
@@ -316,6 +325,7 @@
                     localStorage.setItem('calendargas_availability', JSON.stringify(state.availability));
                     localStorage.setItem('calendargas_cards', JSON.stringify(state.cards));
                     localStorage.setItem('calendargas_cardAvailability', JSON.stringify(state.cardAvailability));
+                    localStorage.setItem('calendargas_cardBudgets', JSON.stringify(state.cardBudgets));
                 } catch (e) { }
 
                 // Re-render everything
@@ -799,7 +809,8 @@
             const balanceLabel = card.type === 'credit' ? 'Disponible' : 'Saldo';
 
             // Budget progress
-            const budget = card.budget || 0;
+            const mKey = monthKey(state.currentYear, state.currentMonth);
+            const budget = state.cardBudgets[card.id + '_' + mKey] || card.budget || 0;
             let budgetHTML = '';
             if (budget > 0) {
                 const budgetPercent = Math.min((spent / budget) * 100, 100);
@@ -927,7 +938,8 @@
             elements.cardType.value = editCard.type;
             elements.cardCurrency.value = editCard.currency;
             elements.cardBalance.value = editCard.balance;
-            elements.cardBudget.value = editCard.budget || '';
+            const mKey = monthKey(state.currentYear, state.currentMonth);
+            elements.cardBudget.value = state.cardBudgets[editCard.id + '_' + mKey] || editCard.budget || '';
             elements.cardColor.value = editCard.color;
             updateCardBalanceLabel();
         } else {
@@ -953,18 +965,33 @@
 
     function saveCard(data) {
         const editId = elements.cardEditId.value;
+        const mKey = monthKey(state.currentYear, state.currentMonth);
+        const budgetValue = data.budget;
+        delete data.budget; // Don't store budget on card object
+
         if (editId) {
             const idx = state.cards.findIndex(c => c.id === editId);
             if (idx >= 0) {
                 state.cards[idx] = { ...state.cards[idx], ...data };
+                // Save budget for current month
+                if (budgetValue > 0) {
+                    state.cardBudgets[editId + '_' + mKey] = budgetValue;
+                } else {
+                    delete state.cardBudgets[editId + '_' + mKey];
+                }
             }
             showToast('💳 Tarjeta actualizada');
         } else {
-            state.cards.push({ id: generateId(), ...data });
+            const newCard = { id: generateId(), ...data };
+            state.cards.push(newCard);
+            if (budgetValue > 0) {
+                state.cardBudgets[newCard.id + '_' + mKey] = budgetValue;
+            }
             showToast('💳 Tarjeta agregada');
         }
         saveData();
         renderCards();
+        updateSidebar();
         populateCardSelect();
         closeCardModal();
     }
